@@ -1,5 +1,5 @@
 {
-  "name": "datausa-wikimedia",
+  "name": "oec-wikimedia",
   "version": "1.0.0",
   "description": "Visualization scraper/formatter for uploading to Wikimedia Commons",
   "main": "scrape.js",
@@ -10,18 +10,19 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DataUSA/datausa-wikimedia.git"
+    "url": "git+https://github.com/Datawheel/oec-wikimedia.git"
   },
   "author": "",
   "license": "AGPL-3.0",
   "bugs": {
-    "url": "https://github.com/DataUSA/datausa-wikimedia/issues"
+    "url": "https://github.com/Datawheel/oec-wikimedia/issues"
   },
-  "homepage": "https://github.com/DataUSA/datausa-wikimedia#readme",
+  "homepage": "https://github.com/Datawheel/oec-wikimedia#readme",
   "dependencies": {
-    "axios": "^0.17.1",
-    "d3-array": "^1.2.1",
-    "nightmare": "^2.10.0",
-    "nodemw": "^0.12.0"
+    "axios": "^0.21.1",
+    "d3-array": "^2.12.1",
+    "d3plus-text": "^1.0.2",
+    "nightmare": "^3.0.2",
+    "nodemw": "^0.14.0"
   }
 }
