@@ -1,198 +1,150 @@
-/* globals d3 */
-
 const Nightmare = require("nightmare"),
       config = require("./config.js"),
-      fs = require("fs");
+      fs = require("fs"),
+      {titleCase} = require("d3plus-text");
 
 const dir = "./exports";
 if (!fs.existsSync(dir)) fs.mkdirSync(dir);
 
-function scrape(url) {
+const browser = new Nightmare({show: false})
+  .viewport(1100, 800);
 
-  const fullUrl = `https://datausa.io/${url}`;
+function scrape(urls) {
 
-  let filename = url.replace(/\//g, "-");
-  filename = filename.replace("?level=", "").replace("&key=", "-");
-  const profile = filename.includes("profile");
+  const [fullUrl, profileUrl] = urls;
 
-  return new Nightmare({show: false})
-    .viewport(profile ? 1400 : 1100, 650)
+  const filename = fullUrl
+    .replace(/^[a-zA-Z]{3,5}\:\/{2}[a-zA-Z0-9_.:-]+\//, "")
+    .replace(/\/$/, "")
+    .replace(/\//g, "-")
+    .replace(/^[a-z]{2}\-/, "");
+
+  return browser
     .goto(fullUrl)
-    .wait(5000)
-    .evaluate((profile, filename, url, done) => {
+    .wait("svg.d3plus-viz")
+    .evaluate((filename, url, profileUrl, done) => {
 
-      let build, description = "", heightMod = 0, sources = [], title;
+      const viz = document.querySelector("svg.d3plus-viz");
+      const title = document.querySelector("h1.title")
+        .innerText.toLowerCase()
+        .replace("what does ", "")
+        .replace("?", "")
+        .replace(/([eximp]{2}port)/, "Product $1s");
 
-      const viz = d3.select("svg");
+      const sources = [
+        {
+          topic: "International",
+          table: "HS6 REV. 1992 (1995 - 2019)",
+          subtopic: "Trade",
+          dataset_link: "http://www.cepii.fr/CEPII/en/bdd_modele/presentation.asp?id=37",
+          source_name: "BACI",
+          source_description: "Product Trade by Year and Country (HS 6-digit depth)",
+          dataset_name: "HS6 REV. 1992 (1995 - 2019)"
+        }
+      ];
 
-      if (profile) {
-        build = window.current_build;
+      const legend = [];
 
-        title = build.title.substring(11).replace(/\n/g, "").replace(/\s{2,}/g, " ");
-        title += ` (${d3.max(d3.merge(build.data.map(d => d.data)), d => d.year)})`;
+      // viz specific
+      const key = document.querySelector("g.d3plus-viz-legend");
+      if (key) {
 
-        d3.selectAll(".content aside p").each(function() {
-          const text = d3.select(this).text();
-          if (text) {
-            if (description.length) description += " ";
-            description += text;
-          }
-        });
+        const height = parseFloat(viz.getAttribute("height"), 10) - key.getBoundingClientRect().height - 5;
+        viz.setAttribute("height", `${height}px`);
+        viz.style.height = `${height}px`;
 
-        sources = build.sources;
-
-        if (build.viz.font) {
-          build.viz.font("Noto Sans").draw(() => {
-            setTimeout(() => {
-              build.viz.draw();
-              setTimeout(finishScrape, 1000);
-            }, 1000);
+        key.querySelectorAll("rect.d3plus-Shape")
+          .forEach(elem => {
+            const color = elem.getAttribute("fill");
+            const label = elem.getAttribute("aria-label");
+            if (label && color) legend.push({color, label});
           });
-        }
-        else {
-          finishScrape();
-        }
+        key.remove();
 
       }
-      else {
-        title = `United States Map of ${window.buildTitle}`;
-        title += ` (${d3.select("#map-fullscreen .year-toggle .d3plus_button_active .d3plus_button_label").html()})`;
-
-        window.load(window.data_url, (x, y, json) => {
-          sources.push(json.source);
-          finishScrape();
-        });
-
-      }
+      viz.querySelector("title").remove();
+      viz.querySelector("desc").remove();
+      viz.querySelector(".d3plus-viz-back").remove();
+      viz.querySelector(".d3plus-viz-title").remove();
+      viz.querySelector("g.d3plus-Rect-image").remove();
+      viz.querySelector("g.d3plus-Rect-hover").remove();
+      viz.querySelector("g.d3plus-Rect-active").remove();
+      viz.querySelectorAll("clipPath").forEach(el => el.remove());
+      viz.querySelectorAll("defs").forEach(el => el.remove());
 
       function recursiveFormat(node) {
+
         if (!node.tagName) return;
-        const elem = d3.select(node);
+
+        const style = window.getComputedStyle(node);
 
         if (node.tagName.toLowerCase() === "svg") {
-          elem.attr("xmlns", "http://www.w3.org/2000/svg")
-            .attr("xmlns:xlink", "http://www.w3.org/1999/xlink")
-            .attr("height", elem.attr("height") - heightMod)
-            .style("background-color", null);
+          node.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+          node.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+          node.style.backgroundColor = null;
         }
 
-        if (elem.attr("font-family")) elem.attr("font-family", "Noto Sans, sans-serif");
-        if (elem.attr("vector-effect")) elem.attr("vector-effect", null);
-        if (elem.attr("opacity")) elem.attr("opacity", 1);
-        if (elem.attr("fill-opacity")) elem.attr("fill-opacity", 1);
-        if (elem.attr("stroke-opacity")) elem.attr("stroke-opacity", 1);
-        const transform = elem.style("text-transform");
-        if (transform) {
-          if (transform === "uppercase") elem.text(elem.text().toUpperCase());
-          else if (transform === "lowercase") elem.text(elem.text().toLowerCase());
-          else elem.style("text-transform", null);
+        if (node.getAttribute("font-size")) {
+          const fontSize = Math.floor(parseFloat(node.getAttribute("font-size"), 10) * 0.9);
+          node.setAttribute("font-family", `${fontSize}px`);
+          node.style.fontSize = `${fontSize}px`;
         }
-        elem.attr("clip-path", null);
+        if (node.getAttribute("font-family")) {
+          node.setAttribute("font-family", "Noto Sans, sans-serif");
+          node.style.fontFamily = "Noto Sans, sans-serif";
+        }
+
+        const removals = ["clip-path", "vector-effect"];
+        removals.forEach(r => {
+          if (node.getAttribute(r)) node.removeAttribute(r);
+        });
+
+        if (node.getAttribute("opacity")) node.setAttribute("opacity", 1);
+        if (node.getAttribute("stroke-opacity")) node.setAttribute("stroke-opacity", 1);
+
+        const strokeWidth = node.getAttribute("stroke-width");
+        node.setAttribute("stroke-width", !strokeWidth ? 0 : strokeWidth);
+        if (!strokeWidth) node.setAttribute("stroke", "transparent");
+
+        let fill = node.getAttribute("fill");
+        if (fill !== style.fill) {
+          fill = style.fill;
+          node.setAttribute("fill", style.fill);
+        }
+
+        // sets "fill-opacity" attribute to `0` if fill is "transparent" or "none"
+        const transparent = ["none", "transparent"].includes(fill);
+        const fillOpacity = node.getAttribute("fill-opacity");
+        if (transparent) node.setAttribute("fill-opacity", transparent ? 0 : fillOpacity);
+
+        if (node.getAttribute("aria-label")) {
+          node.setAttribute("aria-label", node.getAttribute("aria-label")
+            .replace(/\&/g, "&amp;")
+            .replace(/\</g, "&lt;")
+            .replace(/\>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+          );
+        }
+
+        const transform = style.textTransform;
+        if (transform) {
+          if (transform === "uppercase") node.innerText = node.innerText.toUpperCase();
+          else if (transform === "lowercase") node.innerText = node.innerText.toLowerCase();
+          else node.style.textTransform = null;
+        }
 
         Array.from(node.childNodes).map(recursiveFormat);
-      }
-
-      function finishScrape() {
-
-        if (build && ["bar", "scatter", "line", "stacked"].includes(build.config.type)) {
-          d3.select("g#app").attr("transform", "translate(5, 0)");
-          d3.select("g#data").attr("transform", "translate(5, 0)");
-        }
-
-        // map specific
-        const scale = viz.select("g.scale");
-        const legend = [];
-        if (scale.size()) {
-          heightMod += scale.node().getBBox().height;
-          const ticks = scale.selectAll("text.d3plus_tick")[0];
-          scale.selectAll(".d3plus_legend_break").each(function(d, i) {
-            legend.push({
-              color: d3.select(this).attr("fill"),
-              label: `${ticks[i].innerHTML} - ${ticks[i + 1].innerHTML}`
-            });
-
-          });
-          scale.remove();
-        }
-        viz.select("g.tiles").remove();
-        viz.select("g.pins").remove();
-        viz.select("g.brush").remove();
-        viz.select("rect#d3plus_graph_background").remove();
-        viz.select("path#d3plus_graph_mirror").remove();
-
-        const drawer = d3.select(viz.node().parentNode).select("#d3plus_drawer");
-        if (drawer.size()) {
-          heightMod += drawer.node().clientHeight;
-          drawer.remove();
-        }
-
-        // viz specific
-        const key = viz.select("g#key");
-        if (key.size()) {
-          heightMod += key.node().getBBox().height;
-          const colorKey = window.current_build.color;
-          const attrs = window.attrStyles[colorKey];
-          const dataAttrs = window.current_build.viz.attrs();
-          const format = window.viz.format.text;
-          const squares = key.selectAll("rect");
-          let exclude = [];
-          if (colorKey === "sex") exclude = ["Women", "Men"];
-          else if (colorKey === "race" && squares.size() > 2) exclude = ["Non-Black"];
-          squares.each(function() {
-            const fill = d3.select(this).attr("fill");
-            const reg = new RegExp(/png_(.*)\)/g);
-            let fillColor = reg.exec(fill);
-            if (fillColor) {
-              fillColor = fillColor[1];
-              let color, label;
-              for (const id in attrs) {
-                if ({}.hasOwnProperty.call(attrs, id)) {
-                  const attr = attrs[id];
-                  if (attr.color.includes(fillColor)) {
-                    if (dataAttrs && id in dataAttrs) {
-                      label = dataAttrs[id].name;
-                      color = attr.color;
-                      break;
-                    }
-                    const tempName = format(id, {key: colorKey});
-                    if (!exclude.includes(tempName) && isNaN(tempName)) {
-                      label = tempName;
-                      color = attr.color;
-                      break;
-                    }
-                  }
-                }
-              }
-              if (label && color) legend.push({color, label});
-            }
-          });
-          key.remove();
-        }
-        viz.select("rect#bg").remove();
-        viz.select("g#timeline").remove();
-        viz.select("g#footer").remove();
-        viz.select("rect#d3plus_overlay").remove();
-        viz.select("g#edge_hover").remove();
-        viz.selectAll("clipPath").remove();
-        viz.selectAll("defs").remove();
-
-        recursiveFormat(viz.node());
-
-        if (profile) {
-          const splitUrl = url = url.split("/");
-          splitUrl.splice(6, 1);
-          splitUrl[6] = `#${splitUrl[6]}`;
-          splitUrl.pop();
-          url = url.join("/");
-        }
-
-        done(null, {description, filename, legend, sources, title, url, viz: viz.node().outerHTML});
 
       }
 
-    }, profile, filename, fullUrl)
-    .end()
+      recursiveFormat(viz);
+
+      done(null, {filename, legend, sources, title, url, link: profileUrl, viz: viz.outerHTML});
+
+    }, filename, fullUrl, profileUrl)
     .then(data => {
+
+      data.title = titleCase(data.title);
 
       process.stdout.clearLine();
       process.stdout.cursorTo(0);
@@ -201,7 +153,10 @@ function scrape(url) {
       const contents = `<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
 
-${data.viz}`;
+${data.viz
+    .replace(/\>\</g, ">\n<")
+    .replace(/transform="\n\s{1,}([^\n]{1,})\n\s{1,}([^\n]{1,})\n\s{1,}([^\"]{1,})/g, "transform=\"$1$2$3")
+    .replace(/\s([a-z\-]{2,}\=\"[^\"]{1,}\")/g, "\n  $1")}`;
 
       delete data.viz;
 
@@ -217,11 +172,11 @@ ${data.viz}`;
       const date = `${yyyy}-${mm}-${dd}`;
       const meta = `=={{int:filedesc}}==
 {{Information
-|description={{en|1=${data.description || data.title}}}
+|description={{en|1=${data.title}}}
 ${data.legend.map(d => `{{legend|${d.color}|${d.label}}}`).join("\n")}
 |date=${date}
-|source=*Interactive Visualization: [${data.url} Data USA]
-${data.sources.map((d, i) => `${i ? "\n" : ""}*Data Source: [${d.link} ${d.org} - ${d.dataset}]`)}
+|source=*Interactive Visualization: [${data.link || data.url} OEC - ${data.title}]
+${data.sources.map((d, i) => `${i ? "\n" : ""}*Data Source: [${d.dataset_link} ${d.source_name} - ${d.dataset_name}]`)}
 |author=[http://datawheel.us/ Datawheel]
 |permission=
 |other versions=
@@ -230,12 +185,16 @@ ${data.sources.map((d, i) => `${i ? "\n" : ""}*Data Source: [${d.link} ${d.org} 
 {{ValidSVG}}
 
 =={{int:license-header}}==
-{{Data USA license}}
+{{OEC license}}
+
+[[Category:Media contributed by OEC]]
 `;
       fs.writeFileSync(`${dir}/${data.filename}.txt`, meta);
     })
-    .catch(() => {
+    .catch(e => {
+      console.log("");
       console.error("Failed:", fullUrl);
+      console.log(e);
     });
 
 }
@@ -245,7 +204,11 @@ function scrapeNext(index) {
   scrape(config.urls[index])
     .then(() => {
       if (index < config.urls.length - 1) scrapeNext(index + 1);
-      else console.log("\n");
+      else {
+        console.log("\n");
+        browser.end();
+        process.exit(0);
+      }
     });
 }
 scrapeNext(0);

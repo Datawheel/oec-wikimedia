@@ -6,7 +6,7 @@ const Bot = require("nodemw"),
         debug: false,
         username: process.env.WIKI_USERNAME,
         password: process.env.WIKI_PASSWORD,
-        userAgent: "DataUSA Uploader (https://datausa.io; hello@datausa.io)"
+        userAgent: "OEC Uploader (https://oec.world; support@oec.world)"
       }),
       fs = require("fs");
 
@@ -15,16 +15,29 @@ let total;
 function upload(files) {
 
   const fileName = files.pop();
-  process.stdout.write(`\nUploaded ${total - files.length} of ${total}`);
+  process.stdout.write(`\nUploading ${total - files.length} of ${total}`);
   const {title} = require(fileName.replace("svg", "js"));
 
   fs.readFile(fileName, "utf8", (err, svg) => {
-    if (err) throw err;
+    if (err) {
+      console.log("\nSVG readFile:");
+      console.error(err);
+    }
     fs.readFile(fileName.replace("svg", "txt"), "utf8", (err, txt) => {
-      if (err) throw err;
-      client.upload(title, svg, "updates SVG", () => {
+      if (err) {
+        console.log("\nTXT readFile:");
+        console.error(err);
+      }
+      client.upload(title, svg, "updates SVG", err => {
+        if (err) {
+          console.log("\nSVG upload:");
+          console.error(err);
+        }
         client.edit(`File:${title}.svg`, txt, "updates description", err => {
-          if (err) throw err;
+          if (err) {
+            console.log("\nTXT edit:");
+            console.error(err);
+          }
 
           process.stdout.clearLine();
           process.stdout.cursorTo(0);
@@ -33,7 +46,7 @@ function upload(files) {
           if (files.length) {
             setTimeout(() => upload(files), 7500);
           }
-          else console.log("done!");
+          else console.log("\n\ndone!");
         });
       });
     });
