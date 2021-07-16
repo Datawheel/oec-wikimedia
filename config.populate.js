@@ -2,43 +2,36 @@ const axios = require("axios"),
       d3 = require("d3-array"),
       fs = require("fs");
 
-const urls = [
-  "map/?level=state&key=homicide_rate",
-  "map/?level=state&key=adult_obesity",
-  "map/?level=state&key=teen_births",
-  "map/?level=state&key=adult_smoking",
-  "map/?level=state&key=uninsured",
-  "map/?level=state&key=pop,pop_moe,pop_rank",
-  "map/?level=state&key=income,income_moe,income_rank"
-];
+const urls = [];
 
 const embeds = [
-  "profile/geo/{{location}}/demographics/citizenship",
-  "profile/geo/{{location}}/demographics/ethnicity",
-  "profile/geo/{{location}}/demographics/languages",
-  "profile/geo/{{location}}/economy/tmap_occ_num_emp",
-  "profile/geo/{{location}}/economy/tmap_ind_num_emp"
+  // "https://oec.world/en/visualize/embed/tree_map/hs92/export/{{memberSlug}}/all/show/2019/", // product exports by country
+  "https://oec.world/en/visualize/embed/tree_map/{{slug}}/export/{{memberSlug}}/all/show/2020/" // product exports by subnat
 ];
 
-const datafold = (json, data = "data", headers = "headers") =>
-  json[data].map(data =>
-    json[headers].reduce((obj, header, i) =>
-      (obj[header] = data[i], obj), {}));
+// const countries = axios.get("https://oec.world/api/profilesearch?profile=1&limit=10000")
+//   .then(resp => resp.data)
+//   .then(data => data.grouped.map(d => d[0]));
 
-// const state = axios.get("https://api.datausa.io/attrs/geo?sumlevel=state")
-//   .then(data => datafold(data.data).map(d => d.id));
+const regionals = axios.get("https://oec.world/api/profilesearch?profile=38&limit=10000")
+  .then(resp => resp.data)
+  .then(data => data.grouped.map(d => d[0]));
 
-const county = axios.get("https://api.datausa.io/api/?sort=desc&required=pop&order=pop&sumlevel=county&show=geo&limit=1")
-  .then(data => datafold(data.data).map(d => d.geo));
-
-Promise.all([county])
+Promise.all([regionals])
   .then(data => {
     const locations = d3.merge(data);
-    embeds.forEach(embed => {
-      locations.forEach(geo => {
-        urls.push(embed.replace("{{location}}", geo));
+    embeds
+      .forEach(embed => {
+        locations
+          // .slice(0, 1)
+          // .filter(d => ["twn"].includes(d.memberSlug))
+          .forEach(({memberSlug, slug}) => {
+            urls.push([
+              embed.replace("{{memberSlug}}", memberSlug).replace("{{slug}}", slug),
+              `https://oec.world/en/profile/${slug}/${memberSlug}`
+            ]);
+          });
       });
-    });
     console.log(urls);
     fs.writeFileSync("config.js", `module.exports = ${JSON.stringify({urls}, null, 2)};\n`);
   });
