@@ -1,3 +1,4 @@
+const { default: axios } = require("axios");
 const Nightmare = require("nightmare"),
       config = require("./config.js"),
       fs = require("fs"),
@@ -6,10 +7,7 @@ const Nightmare = require("nightmare"),
 const dir = "./exports";
 if (!fs.existsSync(dir)) fs.mkdirSync(dir);
 
-const browser = new Nightmare({show: false})
-  .viewport(1100, 800);
-
-function scrape(urls) {
+function scrape(urls, browser) {
 
   const [fullUrl, profileUrl] = urls;
 
@@ -22,6 +20,7 @@ function scrape(urls) {
   return browser
     .goto(fullUrl)
     .wait("svg.d3plus-viz")
+    .wait(1000)
     .evaluate((filename, url, profileUrl, done) => {
 
       const viz = document.querySelector("svg.d3plus-viz");
@@ -30,18 +29,6 @@ function scrape(urls) {
         .replace("what does ", "")
         .replace("?", "")
         .replace(/([eximp]{2}port)/, "Product $1s");
-
-      const sources = [
-        {
-          topic: "International",
-          table: "HS6 REV. 1992 (1995 - 2019)",
-          subtopic: "Trade",
-          dataset_link: "http://www.cepii.fr/CEPII/en/bdd_modele/presentation.asp?id=37",
-          source_name: "BACI",
-          source_description: "Product Trade by Year and Country (HS 6-digit depth)",
-          dataset_name: "HS6 REV. 1992 (1995 - 2019)"
-        }
-      ];
 
       const legend = [];
 
@@ -62,6 +49,8 @@ function scrape(urls) {
         key.remove();
 
       }
+      else throw "No Data Available";
+
       viz.querySelector("title").remove();
       viz.querySelector("desc").remove();
       viz.querySelector(".d3plus-viz-back").remove();
@@ -139,9 +128,25 @@ function scrape(urls) {
 
       recursiveFormat(viz);
 
-      done(null, {filename, legend, sources, title, url, link: profileUrl, viz: viz.outerHTML});
+      done(null, {
+        api: window.__INITIAL_STATE__.vizbuilder.API,
+        filename,
+        legend,
+        title,
+        url,
+        link: profileUrl,
+        viz: viz.outerHTML
+      });
 
     }, filename, fullUrl, profileUrl)
+    .then(data => {
+      return axios.get(`https://oec.world${data.api}`)
+        .then(resp => resp.data.source.map(s => s.annotations))
+        .then(sources => {
+          data.sources = sources;
+          return data;
+        });
+    })
     .then(data => {
 
       data.title = titleCase(data.title);
@@ -199,16 +204,35 @@ ${data.sources.map((d, i) => `${i ? "\n" : ""}*Data Source: [${d.dataset_link} $
 
 }
 
-function scrapeNext(index) {
-  process.stdout.write(`\nScraping ${index + 1} of ${config.urls.length}`);
-  scrape(config.urls[index])
-    .then(() => {
-      if (index < config.urls.length - 1) scrapeNext(index + 1);
-      else {
-        console.log("\n");
-        browser.end();
-        process.exit(0);
-      }
-    });
-}
-scrapeNext(0);
+(async function() {
+
+  const browser = new Nightmare({show: false})
+    .viewport(1100, 800);
+
+  const {OEC_USERNAME, OEC_PASSWORD} = process.env;
+  if (OEC_USERNAME && OEC_PASSWORD) {
+    await browser
+      .goto("https://oec.world/en/login?redirect=/en/account")
+      .type("#login input[type='email']", OEC_USERNAME)
+      .type("#login input[type='password']", OEC_PASSWORD)
+      .click("#login button[type='submit']")
+      .wait(".api-key")
+      .then(() => console.log("Successful Sign In"))
+      .catch(e => console.error(e));
+  }
+
+  function scrapeNext(index) {
+    process.stdout.write(`\nScraping ${index + 1} of ${config.urls.length}`);
+    scrape(config.urls[index], browser)
+      .then(() => {
+        if (index < config.urls.length - 1) scrapeNext(index + 1);
+        else {
+          console.log("\n");
+          browser.end();
+          process.exit(0);
+        }
+      });
+  }
+  scrapeNext(0);
+
+})();
