@@ -1,4 +1,4 @@
-# datausa-wikimedia
+# oec-wikimedia
 
 Must install the Google Font "Noto Sans" before proceeding.
 
@@ -7,9 +7,14 @@ Local configuration needs to be stored in `config.js` file with the following st
 ```js
 module.exports = {
   urls: [
-    "map/?level=state&key=violent_crime",
-    "profile/geo/tennessee/demographics/ethnicity/",
-    "profile/geo/massachusetts/education/majors/"
+    [
+      "/en/visualize/embed/tree_map/hs92/export/chn/all/show/2019/",
+      "https://oec.world/en/profile/country/chn"
+    ],
+    [
+      "/en/visualize/embed/tree_map/hs92/export/usa/all/show/2019/",
+      "https://oec.world/en/profile/country/chn"
+    ]
   ]
 };
 ```
