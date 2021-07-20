@@ -2,24 +2,24 @@ const axios = require("axios"),
       d3 = require("d3-array"),
       fs = require("fs");
 
-const urls = [];
+const prefix = process.env.DOMAIN || "https://oec.world";
 
 const embeds = [
-  // "https://oec.world/en/visualize/embed/tree_map/hs92/export/{{memberSlug}}/all/show/2019/", // product exports by country
-  "https://oec.world/en/visualize/embed/tree_map/{{slug}}/export/{{memberSlug}}/all/show/2020/" // product exports by subnat
+  "/en/visualize/embed/tree_map/hs92/export/{{memberSlug}}/all/show/2019/", // product exports by country
+  // "/en/visualize/embed/tree_map/{{slug}}/export/{{memberSlug}}/all/show/2020/" // product exports by subnat
 ];
 
-// const countries = axios.get("https://oec.world/api/profilesearch?profile=1&limit=10000")
-//   .then(resp => resp.data)
-//   .then(data => data.grouped.map(d => d[0]));
+const searchURL = "api/profilesearch?profile=1&limit=10000"; // countries
+// const searchURL = "api/profilesearch?profile=38&limit=10000"; // regional
 
-const regionals = axios.get("https://oec.world/api/profilesearch?profile=38&limit=10000")
+const profiles = axios.get(new URL(searchURL, prefix).href)
   .then(resp => resp.data)
   .then(data => data.grouped.map(d => d[0]));
 
-Promise.all([regionals])
+Promise.all([profiles])
   .then(data => {
     const locations = d3.merge(data);
+    const urls = [];
     embeds
       .forEach(embed => {
         locations
@@ -32,6 +32,7 @@ Promise.all([regionals])
             ]);
           });
       });
-    console.log(urls);
+    console.log(`${urls.length} URLs populated\n`);
     fs.writeFileSync("config.js", `module.exports = ${JSON.stringify({urls}, null, 2)};\n`);
+    process.exit(0);
   });

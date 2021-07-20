@@ -46,7 +46,10 @@ function upload(files) {
           if (files.length) {
             setTimeout(() => upload(files), 7500);
           }
-          else console.log("\n\ndone!");
+          else {
+            console.log("\n\ndone!");
+            process.exit(0);
+          }
         });
       });
     });
