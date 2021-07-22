@@ -7,6 +7,9 @@ const Nightmare = require("nightmare"),
 const dir = "./exports";
 if (!fs.existsSync(dir)) fs.mkdirSync(dir);
 
+const prefix = process.env.DOMAIN || "https://oec.world";
+const token = process.env.OEC_TOKEN || false;
+
 function scrape(urls, browser) {
 
   const [fullUrl, profileUrl] = urls;
@@ -14,11 +17,12 @@ function scrape(urls, browser) {
   const filename = fullUrl
     .replace(/^[a-zA-Z]{3,5}\:\/{2}[a-zA-Z0-9_.:-]+\//, "")
     .replace(/\/$/, "")
+    .replace(/^\//, "")
     .replace(/\//g, "-")
     .replace(/^[a-z]{2}\-/, "");
 
   return browser
-    .goto(fullUrl)
+    .goto(new URL(fullUrl, prefix).href)
     .wait("svg.d3plus-viz")
     .wait(1000)
     .evaluate((filename, url, profileUrl, done) => {
@@ -140,7 +144,7 @@ function scrape(urls, browser) {
 
     }, filename, fullUrl, profileUrl)
     .then(data => {
-      return axios.get(`https://oec.world${data.api}`)
+      return axios.get(new URL(token ? `${data.api}&token=${token}` : data.api, prefix).href)
         .then(resp => resp.data.source.map(s => s.annotations))
         .then(sources => {
           data.sources = sources;
@@ -211,8 +215,9 @@ ${data.sources.map((d, i) => `${i ? "\n" : ""}*Data Source: [${d.dataset_link} $
 
   const {OEC_USERNAME, OEC_PASSWORD} = process.env;
   if (OEC_USERNAME && OEC_PASSWORD) {
+    console.log("Signing in...");
     await browser
-      .goto("https://oec.world/en/login?redirect=/en/account")
+      .goto(new URL("/en/login?redirect=/en/account", prefix).href)
       .type("#login input[type='email']", OEC_USERNAME)
       .type("#login input[type='password']", OEC_PASSWORD)
       .click("#login button[type='submit']")
