@@ -21,6 +21,8 @@ function scrape(urls, browser) {
     .replace(/\//g, "-")
     .replace(/^[a-z]{2}\-/, "");
 
+  if (fs.existsSync(`${dir}/${filename}.svg`)) return Promise.resolve();
+
   return browser
     .goto(new URL(fullUrl, prefix).href)
     .wait("svg.d3plus-viz")
