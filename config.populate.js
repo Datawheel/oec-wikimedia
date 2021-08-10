@@ -26,8 +26,9 @@ Promise.all([profiles])
           // .slice(0, 1)
           // .filter(d => ["twn"].includes(d.memberSlug))
           .forEach(({id, memberSlug, slug}) => {
+            const embedSlug = slug.replace(/^(subnational_[a-z]{3})_.*$/g, "$1");
             urls.push([
-              embed.replace("{{memberSlug}}", memberSlug).replace("{{slug}}", slug).replace("{{id}}", id),
+              embed.replace("{{memberSlug}}", memberSlug).replace("{{slug}}", embedSlug).replace("{{id}}", id),
               `https://oec.world/en/profile/${slug}/${memberSlug}`
             ]);
           });
