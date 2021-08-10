@@ -2,13 +2,18 @@ const { default: axios } = require("axios");
 const Nightmare = require("nightmare"),
       config = require("./config.js"),
       fs = require("fs"),
+      {group} = require("d3-array"),
       {titleCase} = require("d3plus-text");
 
 const dir = "./exports";
 if (!fs.existsSync(dir)) fs.mkdirSync(dir);
 
+const errorDir = "./errors";
+if (!fs.existsSync(errorDir)) fs.mkdirSync(errorDir);
+
 const prefix = process.env.DOMAIN || "https://oec.world";
 const token = process.env.OEC_TOKEN || false;
+const errors = [];
 
 function scrape(urls, browser) {
 
@@ -206,13 +211,20 @@ ${data.sources.map((d, i) => `${i ? "\n" : ""}*Data Source: [${d.dataset_link} $
       console.log("");
       console.error("Failed:", fullUrl);
       console.log(e);
+      errors.push(fullUrl);
     });
 
 }
 
 (async function() {
 
-  const browser = new Nightmare({show: false})
+  const browser = new Nightmare({
+      executionTimeout: 4000,
+      gotoTimeout: 4000,
+      show: false,
+      typeInterval: 20,
+      waitTimeout: 4000
+    })
     .viewport(1100, 800);
 
   const {OEC_USERNAME, OEC_PASSWORD} = process.env;
@@ -233,10 +245,25 @@ ${data.sources.map((d, i) => `${i ? "\n" : ""}*Data Source: [${d.dataset_link} $
     scrape(config.urls[index], browser)
       .then(() => {
         if (index < config.urls.length - 1) scrapeNext(index + 1);
+        // if (index < 15) scrapeNext(index + 1);
         else {
+
           console.log("\n");
           browser.end();
+
+          const nestedErrors = group(errors, d => {
+            const m = d.match(/\/(subnational_[a-z_]{3,})\//);
+            if (m) return m[1];
+            else return "Other";
+          });
+          const errorJSON = JSON.stringify(
+            Array.from(nestedErrors).reduce((obj, d) => (obj[d[0]] = d[1], obj), {}),
+            null, 2
+          );
+          fs.writeFileSync(`${errorDir}/errors-${+new Date()}.json`, errorJSON);
+
           process.exit(0);
+
         }
       });
   }
